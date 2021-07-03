@@ -1,0 +1,6 @@
+*.DS_Store
+*.swp
+*.jpg
+__pycache__/*
+saved_models/*
+wandb/*
