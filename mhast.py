@@ -6,15 +6,13 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Dense, Reshape, Concatenate, Dropout
 from PIL import Image
 import numpy as np
+from tensorflow.python.keras.layers.core import Flatten
 import wandb
 from wandb.keras import WandbCallback
 
 from dataset import DatasetTF
 
 print(f"{tf.__version__}")
-project_name = 'foveate'
-wandb.login(key="7e48787d23b800f370d524967c31a4fd8c7fb1a1")
-wandb.init(project=project_name, entity='alimoeeny')
 
 device = None
 if tf.test.is_built_with_cuda:
@@ -26,7 +24,8 @@ if tf.test.is_built_with_cuda:
     tf.config.experimental.set_memory_growth(devices[0], True)
     tf.config.experimental.get_memory_usage('GPU:0')
 
-image_width = 256
+scale_factor = 8
+image_width = int(2048 / scale_factor)
 batch_size = 1
 epochs = 30
 
@@ -39,32 +38,36 @@ x = Dropout(.2)(x)
 #x = Conv2D(32, (3, 3), activation="relu", padding="same")(x)
 #x = MaxPooling2D((2, 2), padding="same")(x)
 
-# Decoder
-# x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-# x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-# x = Conv2D(3, (3, 3), activation="sigmoid", padding="same")(x)
-x = Concatenate(axis=3)([inputs, x])
-x = Dense(3)(x)
-x = Reshape((256, 256, 3))(x)
-
+# x = Concatenate(axis=3)([inputs, x])
+x = Flatten()(x)
+x = Dense(64*64)(x)
+x = Dense(2)(x)
 
 # Autoencoder
 autoencoder = Model(inputs, x)
 autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
 autoencoder.summary()
 
-train_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_black', image_width=image_width, max_count=580, shuffle=True)
-test_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_black', image_width=image_width, max_count=580, shuffle=True)
+train_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_center', image_width=image_width, max_count=580, shuffle=True, center_from_name=True)
+test_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_center', image_width=image_width, max_count=580, shuffle=True, center_from_name=True)
+
+
+project_name = 'foveate'
+wandb.login(key="7e48787d23b800f370d524967c31a4fd8c7fb1a1")
+wandb.init(project=project_name, entity='alimoeeny')
 
 for counter in range(0, 1000):
   batch_size = counter + 1
   test_data = [test_dataset[i] for i in range(counter*batch_size, (counter+1)*batch_size)]
   test_x = tf.convert_to_tensor([test_data[i]['input_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
-  test_y = tf.convert_to_tensor([test_data[i]['output_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
+  #test_y = tf.convert_to_tensor([test_data[i]['output_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
+  test_y = tf.convert_to_tensor([test_data[i]['center_coordinate'] for i in range(0, len(test_data))], dtype=tf.float32) / scale_factor
 
   data = [train_dataset[i] for i in range(0, counter+batch_size)]
   x = tf.convert_to_tensor([data[i]['input_img'] for i in range(0, len(data))], dtype=tf.float32) / 255.0
-  y = tf.convert_to_tensor([data[i]['output_img'] for i in range(0, len(data))], dtype=tf.float32) / 255.0
+  #y = tf.convert_to_tensor([data[i]['output_img'] for i in range(0, len(data))], dtype=tf.float32) / 255.0
+  y = tf.convert_to_tensor([data[i]['center_coordinate'] for i in range(0, len(data))], dtype=tf.float32) / scale_factor
+
   labels = [data[n]['identifier'] for n in range(0, len(data))]
 
   autoencoder.fit(
@@ -84,8 +87,15 @@ for counter in range(0, 1000):
 
   predictions = autoencoder.predict(test_x)
 
-  normalized = np.squeeze(predictions[0,:,:,:])
-  normalized /= np.max(np.abs(normalized),axis=0)
-  normalized *= (255.0/normalized.max())
-  img = Image.fromarray(np.uint8(normalized))
-  img.save(f"{time.time()}-{labels[0]}.jpg")
+  p_coord = np.squeeze(predictions[0,:])
+  ty = [int(test_y[0][0]), (test_y[0][1])]
+  file = open(f"./{labels[0]}|{ty[0]}|{ty[1]}|{int(p_coord[0])}|{int(p_coord[1])}.text", "w")
+  file.close()
+
+  # normalized = np.squeeze(predictions[0,:,:,:])
+  # mx = np.max(normalized,axis=0)
+  # mn = np.mom(normalized,axis=0)
+  # normalized = (normalized - mn)
+  # normalized = (normalized / max) * 255
+  # img = Image.fromarray(np.uint8(normalized))
+  # img.save(f"{time.time()}-{labels[0]}.jpg")

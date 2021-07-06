@@ -8,12 +8,13 @@ import numpy
 class DatasetTF(tf.keras.utils.Sequence):
     # max_count = 0 -> no limit, otherwise cap the number of samples to max_count
     # point_cloud_point_count = 0 -> do not resample the mesh, otherwise subsample to this many points
-    def __init__(self, device, root_dir, image_width, max_count=0, shuffle=True, file_extension="jpg"):
+    def __init__(self, device, root_dir, image_width, max_count=0, shuffle=True, file_extension="jpg", center_from_name=False):
         super().__init__()
         self.device = device
         self.target_files = []
         self.image_width = image_width
         self.file_extension = file_extension
+        self.extract_center_from_name = center_from_name
 
         for root, _, filenames in os.walk(root_dir):
             for filename in fnmatch.filter(filenames, f'*.{self.file_extension}'):
@@ -52,4 +53,8 @@ class DatasetTF(tf.keras.utils.Sequence):
             'input_img':input_img,
             'output_img':output_img,
         }
+
+        if self.extract_center_from_name:
+            self.training_dataset[index]['center_coordinate'] = [int(trg_file.split('.')[-2].split('_')[-1]), int(trg_file.split('.')[-2].split('_')[-2])]
+
         return self.training_dataset[index]
