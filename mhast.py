@@ -3,7 +3,7 @@ import logging
 
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Dense, Reshape, Concatenate, Dropout
 from PIL import Image
 import numpy as np
 import wandb
@@ -27,31 +27,37 @@ if tf.test.is_built_with_cuda:
     tf.config.experimental.get_memory_usage('GPU:0')
 
 image_width = 256
-batch_size = 13
-epochs = 7
+batch_size = 1
+epochs = 30
 
 input_shape = (image_width, image_width, 3)
 
 inputs = Input(shape=input_shape)
-x = Conv2D(32, (3, 3), activation="relu", padding="same")(inputs)
-x = MaxPooling2D((2, 2), padding="same")(x)
-x = Conv2D(32, (3, 3), activation="relu", padding="same")(x)
-x = MaxPooling2D((2, 2), padding="same")(x)
+x = Conv2D(3, (3, 3), activation="relu", padding="same")(inputs)
+x = Dropout(.2)(x)
+#x = MaxPooling2D((2, 2), padding="same")(x)
+#x = Conv2D(32, (3, 3), activation="relu", padding="same")(x)
+#x = MaxPooling2D((2, 2), padding="same")(x)
 
 # Decoder
-x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
-x = Conv2D(3, (3, 3), activation="sigmoid", padding="same")(x)
+# x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+# x = Conv2DTranspose(32, (3, 3), strides=2, activation="relu", padding="same")(x)
+# x = Conv2D(3, (3, 3), activation="sigmoid", padding="same")(x)
+x = Concatenate(axis=3)([inputs, x])
+x = Dense(3)(x)
+x = Reshape((256, 256, 3))(x)
+
 
 # Autoencoder
 autoencoder = Model(inputs, x)
 autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
 autoencoder.summary()
 
-train_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train', image_width=image_width, max_count=580, shuffle=True)
-test_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train', image_width=image_width, max_count=580, shuffle=True)
+train_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_black', image_width=image_width, max_count=580, shuffle=True)
+test_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_black', image_width=image_width, max_count=580, shuffle=True)
 
 for counter in range(0, 1000):
+  batch_size = counter + 1
   test_data = [test_dataset[i] for i in range(counter*batch_size, (counter+1)*batch_size)]
   test_x = tf.convert_to_tensor([test_data[i]['input_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
   test_y = tf.convert_to_tensor([test_data[i]['output_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
@@ -73,8 +79,8 @@ for counter in range(0, 1000):
     ]
   )
 
-  if counter % 10 != 0:
-    continue
+  # if counter % 5 != 0:
+  #   continue
 
   predictions = autoencoder.predict(test_x)
 
