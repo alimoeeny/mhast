@@ -1,6 +1,9 @@
 *.DS_Store
 *.swp
 *.jpg
+*.text
+*.7z
 __pycache__/*
 saved_models/*
+*.save/*
 wandb/*

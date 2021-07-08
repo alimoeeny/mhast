@@ -1,0 +1,1 @@
+while true; do gpustat -p --no-header; sleep 3; done

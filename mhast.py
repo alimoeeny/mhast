@@ -24,9 +24,12 @@ if tf.test.is_built_with_cuda:
     tf.config.experimental.set_memory_growth(devices[0], True)
     tf.config.experimental.get_memory_usage('GPU:0')
 
+save_it_now = False
+load_it_now = False
+
 scale_factor = 8
 image_width = int(2048 / scale_factor)
-batch_size = 1
+batch_size = 10
 epochs = 30
 
 input_shape = (image_width, image_width, 3)
@@ -40,23 +43,26 @@ x = Dropout(.2)(x)
 
 # x = Concatenate(axis=3)([inputs, x])
 x = Flatten()(x)
-x = Dense(64*64)(x)
+x = Dense(16*16)(x)
 x = Dense(2)(x)
 
 # Autoencoder
 autoencoder = Model(inputs, x)
-autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+autoencoder.compile(optimizer="adam", loss="mean_squared_error") # loss="binary_crossentropy")
 autoencoder.summary()
 
-train_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_center', image_width=image_width, max_count=580, shuffle=True, center_from_name=True)
-test_dataset = DatasetTF(device, root_dir='/Users/ali/Documents/foveate/train_white_n_center', image_width=image_width, max_count=580, shuffle=True, center_from_name=True)
+if load_it_now:
+  autoencoder = tf.keras.models.load_model('1625683159-autoencoder.save')
+
+train_dataset = DatasetTF(device, root_dir='./train_white_n_center', image_width=image_width, max_count=280, shuffle=True, center_from_name=True)
+test_dataset = DatasetTF(device, root_dir='./train_white_n_center', image_width=image_width, max_count=280, shuffle=True, center_from_name=True)
 
 
-project_name = 'foveate'
+project_name = 'foveate_center'
 wandb.login(key="7e48787d23b800f370d524967c31a4fd8c7fb1a1")
 wandb.init(project=project_name, entity='alimoeeny')
 
-for counter in range(0, 1000):
+for counter in range(0, 100000):
   batch_size = counter + 1
   test_data = [test_dataset[i] for i in range(counter*batch_size, (counter+1)*batch_size)]
   test_x = tf.convert_to_tensor([test_data[i]['input_img'] for i in range(0, len(test_data))], dtype=tf.float32) / 255.0
@@ -84,12 +90,15 @@ for counter in range(0, 1000):
 
   # if counter % 5 != 0:
   #   continue
+  if save_it_now:
+    autoencoder.save(f'{int(time.time())}-autoencoder.save')
 
   predictions = autoencoder.predict(test_x)
 
   p_coord = np.squeeze(predictions[0,:])
   ty = [int(test_y[0][0]), (test_y[0][1])]
-  file = open(f"./{labels[0]}|{ty[0]}|{ty[1]}|{int(p_coord[0])}|{int(p_coord[1])}.text", "w")
+  #file = open(f"./{labels[0]}|{int(ty[0])}|{int(ty[1])}|{int(p_coord[0])}|{int(p_coord[1])}.text", "w")
+  file = open(f"./{int(ty[0]-p_coord[0])}|{int(ty[1]-p_coord[1])}|.text", "w")
   file.close()
 
   # normalized = np.squeeze(predictions[0,:,:,:])
@@ -99,3 +108,6 @@ for counter in range(0, 1000):
   # normalized = (normalized / max) * 255
   # img = Image.fromarray(np.uint8(normalized))
   # img.save(f"{time.time()}-{labels[0]}.jpg")
+
+# at the end ------------------------------------------
+autoencoder.save(f'{int(time.time())}-autoencoder.save')
